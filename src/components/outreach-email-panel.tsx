@@ -20,6 +20,7 @@ import { copyTextToClipboard, copyTextToClipboardSync } from "@/lib/utils";
 type GmailStatus = {
   configured: boolean;
   email: string | null;
+  authEmail?: string | null;
 };
 
 type PendingAction = "generate" | "polish" | "save" | "send" | "email" | null;
@@ -223,6 +224,13 @@ export function OutreachEmailPanel({
             <p>
               <span className="text-zinc-500">Gmail:</span> Sending as{" "}
               <span className="text-zinc-200">{gmailStatus.email}</span>
+              {gmailStatus.authEmail &&
+                gmailStatus.authEmail !== gmailStatus.email && (
+                  <span className="text-zinc-500">
+                    {" "}
+                    (via {gmailStatus.authEmail})
+                  </span>
+                )}
             </p>
           )}
           <div className="space-y-2">

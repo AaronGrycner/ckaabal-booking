@@ -2,7 +2,10 @@ import nodemailer from "nodemailer";
 
 export type GmailConnectionStatus = {
   configured: boolean;
+  /** Address recipients see (alias / send-as). */
   email: string | null;
+  /** Account used for SMTP authentication. */
+  authEmail: string | null;
 };
 
 function getSmtpConfig() {
@@ -16,6 +19,34 @@ function getSmtpConfig() {
   return { user, pass };
 }
 
+/** From header address — alias when set, otherwise SMTP login. */
+export function getGmailFromAddress() {
+  const config = getSmtpConfig();
+  if (!config) return null;
+
+  return (
+    process.env.GMAIL_FROM?.trim() ||
+    process.env.OUTREACH_EMAIL?.trim() ||
+    config.user
+  );
+}
+
+function getGmailFromHeader() {
+  const fromAddress = getGmailFromAddress();
+  if (!fromAddress) return null;
+
+  const name =
+    process.env.GMAIL_FROM_NAME?.trim() ||
+    process.env.OUTREACH_SENDER_NAME?.trim() ||
+    process.env.OUTREACH_BAND_NAME?.trim();
+
+  if (name) {
+    return `"${name.replace(/"/g, "")}" <${fromAddress}>`;
+  }
+
+  return fromAddress;
+}
+
 export function isGmailConfigured() {
   return getSmtpConfig() != null;
 }
@@ -23,10 +54,14 @@ export function isGmailConfigured() {
 export async function getGmailConnectionStatus(): Promise<GmailConnectionStatus> {
   const config = getSmtpConfig();
   if (!config) {
-    return { configured: false, email: null };
+    return { configured: false, email: null, authEmail: null };
   }
 
-  return { configured: true, email: config.user };
+  return {
+    configured: true,
+    email: getGmailFromAddress(),
+    authEmail: config.user,
+  };
 }
 
 export async function sendGmailMessage(input: {
@@ -42,6 +77,11 @@ export async function sendGmailMessage(input: {
     );
   }
 
+  const from = getGmailFromHeader();
+  if (!from) {
+    throw new Error("Gmail from address is not configured.");
+  }
+
   const transport = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465,
@@ -53,7 +93,7 @@ export async function sendGmailMessage(input: {
   });
 
   await transport.sendMail({
-    from: config.user,
+    from,
     to: input.to,
     subject: input.subject,
     text: input.body,
