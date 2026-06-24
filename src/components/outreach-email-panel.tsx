@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -52,6 +53,8 @@ export function OutreachEmailPanel({
   gmailStatus,
   premiumPolishEnabled,
   defaultFollowUpDays,
+  sendAttachmentsEnabled,
+  sendAttachmentCount,
 }: {
   lead: Lead;
   initialSubject: string;
@@ -60,6 +63,8 @@ export function OutreachEmailPanel({
   gmailStatus: GmailStatus;
   premiumPolishEnabled: boolean;
   defaultFollowUpDays: number;
+  sendAttachmentsEnabled: boolean;
+  sendAttachmentCount: number;
 }) {
   const router = useRouter();
   const savedContactEmail = lead.contactEmail?.trim() ?? "";
@@ -233,6 +238,22 @@ export function OutreachEmailPanel({
                 )}
             </p>
           )}
+          <p className="text-xs text-zinc-500">
+            <Link href="/settings/signature" className="text-indigo-400 hover:text-indigo-300">
+              Signature settings
+            </Link>
+            {sendAttachmentsEnabled && sendAttachmentCount > 0 ? (
+              <>
+                {" "}
+                · {sendAttachmentCount} file
+                {sendAttachmentCount === 1 ? "" : "s"} will attach on send
+              </>
+            ) : sendAttachmentsEnabled ? (
+              <> · No attachments uploaded yet</>
+            ) : (
+              <> · Attachments disabled</>
+            )}
+          </p>
           <div className="space-y-2">
             <label className="text-zinc-500">To:</label>
             <div className="flex flex-wrap items-end gap-2">

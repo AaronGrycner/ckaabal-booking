@@ -26,6 +26,7 @@ import {
   getOrCreateSignatureTrackedLink,
   prepareOutreachEmailBodyWithTrackedLink,
 } from "@/lib/services/outreach-tracking";
+import { getSendableAttachments } from "@/lib/services/outreach-signature";
 
 export type OutreachActionResult =
   | {
@@ -350,12 +351,14 @@ export async function sendOutreachEmailAction(
       trimmedBody,
       trackedLink,
     );
+    const attachments = await getSendableAttachments(db);
 
     await sendGmailMessage({
       to: toEmail,
       subject: trimmedSubject,
       body: bodyToSend.text,
       html: bodyToSend.html,
+      attachments,
     });
 
     await logContact(db, leadId, {

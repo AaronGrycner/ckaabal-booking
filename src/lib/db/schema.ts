@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const auditStatuses = [
   "pending",
@@ -90,6 +90,42 @@ export type FitLabel = (typeof fitLabels)[number];
 
 export const outreachLinkTypes = ["signature"] as const;
 export type OutreachLinkType = (typeof outreachLinkTypes)[number];
+
+export const outreachSignatureSettings = sqliteTable(
+  "outreach_signature_settings",
+  {
+    id: integer("id").primaryKey().default(1),
+    bodyText: text("body_text").notNull().default(""),
+    attachFilesOnSend: integer("attach_files_on_send", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+);
+
+export const outreachEmailAttachments = sqliteTable(
+  "outreach_email_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    content: blob("content", { mode: "buffer" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+);
+
+export const softwareSuggestions = sqliteTable("software_suggestions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  body: text("body").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
 
 export const searchRuns = sqliteTable("search_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -321,3 +357,8 @@ export type SearchRun = typeof searchRuns.$inferSelect;
 export type GmailCredential = typeof gmailCredentials.$inferSelect;
 export type TrackedOutreachLink = typeof trackedOutreachLinks.$inferSelect;
 export type OutreachLinkClick = typeof outreachLinkClicks.$inferSelect;
+export type OutreachSignatureSettings =
+  typeof outreachSignatureSettings.$inferSelect;
+export type OutreachEmailAttachment =
+  typeof outreachEmailAttachments.$inferSelect;
+export type SoftwareSuggestion = typeof softwareSuggestions.$inferSelect;

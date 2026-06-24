@@ -12,6 +12,7 @@ import {
   getSignatureTrackedLinkForLead,
 } from "@/lib/services/outreach-tracking";
 import { getDefaultFollowUpDays } from "@/lib/crm-utils";
+import { getSignatureSettingsView } from "@/lib/services/outreach-signature";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function LeadDetailPage({
   const gmailStatus = await getGmailConnectionStatus();
   const premiumPolishEnabled = isPremiumPolishEnabled();
   const defaultFollowUpDays = getDefaultFollowUpDays();
+  const signatureSettings = await getSignatureSettingsView(db);
 
   return (
     <div className="space-y-4">
@@ -80,6 +82,8 @@ export default async function LeadDetailPage({
         gmailStatus={gmailStatus}
         premiumPolishEnabled={premiumPolishEnabled}
         defaultFollowUpDays={defaultFollowUpDays}
+        sendAttachmentsEnabled={signatureSettings.settings.attachFilesOnSend}
+        sendAttachmentCount={signatureSettings.attachments.length}
         signatureLink={signatureLink}
         trackedUrl={trackedUrl}
       />

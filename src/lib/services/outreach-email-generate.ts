@@ -1,6 +1,8 @@
 import type { Lead, LeadActivity, WebsiteAudit } from "@/lib/db/schema";
+import { getDb } from "@/lib/db";
 import { getLastMessageSent } from "@/lib/crm-utils";
 import { getAuditIssues } from "@/lib/parse-audit-issues";
+import { resolveOutreachSignatureText } from "@/lib/services/outreach-signature";
 import { formatGenreList } from "@/lib/services/venue-research";
 import OpenAI from "openai";
 
@@ -286,32 +288,6 @@ function getBandContext() {
   };
 }
 
-function buildSignatureBlock() {
-  const custom = process.env.OUTREACH_SIGNATURE?.trim();
-  if (custom) {
-    return custom.replace(/\\n/g, "\n");
-  }
-
-  const { bandName, bandWebsite } = getBandContext();
-  const name = process.env.OUTREACH_SENDER_NAME?.trim() || bandName;
-  const title = process.env.OUTREACH_SENDER_TITLE?.trim();
-  const tagline = process.env.OUTREACH_TAGLINE?.trim();
-  const website = bandWebsite.replace(/^https?:\/\//, "");
-  const email = process.env.OUTREACH_EMAIL?.trim();
-
-  const lines = ["--"];
-  if (name) lines.push(name);
-  if (title) lines.push(title);
-  if (tagline) lines.push(tagline);
-  if (website || email) {
-    lines.push("");
-    if (website) lines.push(website);
-    if (email) lines.push(email);
-  }
-
-  return lines.join("\n");
-}
-
 function buildSenderContext() {
   const { bandName } = getBandContext();
   const senderName = process.env.OUTREACH_SENDER_NAME?.trim() || bandName;
@@ -503,17 +479,18 @@ function buildSuggestedOutcomes(category: string | null): string[] {
   return ["tour routing date", "one-off show", "support slot"];
 }
 
-export function buildGenerationContext(
+export async function buildGenerationContext(
   lead: Lead,
   audit: WebsiteAudit | null,
   activities: LeadActivity[],
   options?: Pick<GenerateOutreachOptions, "mode">,
-): GenerationContext {
+): Promise<GenerationContext> {
   const previousMessage = getLastMessageSent(activities);
   const userNotes = lead.notes?.trim() || null;
   const sender = buildSenderContext();
   const mode =
     options?.mode ?? (isFollowUpLead(lead) ? "follow_up" : "cold");
+  const signature = await resolveOutreachSignatureText(getDb());
 
   return {
     mode,
@@ -533,7 +510,7 @@ export function buildGenerationContext(
     websiteFindings: buildWebsiteFindings(audit, lead),
     suggestedOutcomes: buildSuggestedOutcomes(lead.category),
     previousMessage,
-    signature: buildSignatureBlock(),
+    signature,
     ...sender,
   };
 }
@@ -1355,7 +1332,7 @@ export async function generateOutreachEmail(
   }
 
   const config = getOutreachModelConfig();
-  const context = buildGenerationContext(lead, audit, activities, {
+  const context = await buildGenerationContext(lead, audit, activities, {
     mode: options.mode,
   });
   validateOutreachContext(context);
@@ -1431,7 +1408,7 @@ export async function premiumPolishOutreachEmail(
     throw new Error("Premium polish is disabled.");
   }
 
-  const context = buildGenerationContext(lead, audit, activities);
+  const context = await buildGenerationContext(lead, audit, activities);
   validateOutreachContext(context);
 
   const compressed = compressOutreachContext(

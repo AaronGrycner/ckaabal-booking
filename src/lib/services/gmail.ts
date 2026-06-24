@@ -69,6 +69,11 @@ export async function sendGmailMessage(input: {
   subject: string;
   body: string;
   html?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 }) {
   const config = getSmtpConfig();
   if (!config) {
@@ -98,5 +103,14 @@ export async function sendGmailMessage(input: {
     subject: input.subject,
     text: input.body,
     ...(input.html ? { html: input.html } : {}),
+    ...(input.attachments?.length
+      ? {
+          attachments: input.attachments.map((file) => ({
+            filename: file.filename,
+            content: file.content,
+            contentType: file.contentType,
+          })),
+        }
+      : {}),
   });
 }

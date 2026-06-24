@@ -45,6 +45,16 @@ npm run db:setup-turso
 
 For Vercel, set the same `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in project environment variables.
 
+## Email signature & attachments
+
+Open **Signature** in the nav (or `/settings/signature`) to:
+
+- Set a standard email signature (used for AI-generated drafts and sends)
+- Upload files (PDF, Word, images) to attach on every outreach send
+- Toggle attachments on/off per send
+
+Run `npm run db:push` after pulling to create the new tables.
+
 ## Usage
 
 1. Enter a **venue type** (e.g. `live music venues`) and **location** (e.g. `Nashville TN`)

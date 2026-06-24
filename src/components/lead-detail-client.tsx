@@ -91,6 +91,8 @@ export function LeadDetailClient({
   gmailStatus,
   premiumPolishEnabled,
   defaultFollowUpDays,
+  sendAttachmentsEnabled,
+  sendAttachmentCount,
   signatureLink,
   trackedUrl,
 }: {
@@ -100,6 +102,8 @@ export function LeadDetailClient({
   gmailStatus: { configured: boolean; email: string | null };
   premiumPolishEnabled: boolean;
   defaultFollowUpDays: number;
+  sendAttachmentsEnabled: boolean;
+  sendAttachmentCount: number;
   signatureLink: TrackedOutreachLink | null;
   trackedUrl: string | null;
 }) {
@@ -144,6 +148,8 @@ export function LeadDetailClient({
           gmailStatus={gmailStatus}
           premiumPolishEnabled={premiumPolishEnabled}
           defaultFollowUpDays={defaultFollowUpDays}
+          sendAttachmentsEnabled={sendAttachmentsEnabled}
+          sendAttachmentCount={sendAttachmentCount}
         />
       </div>
 

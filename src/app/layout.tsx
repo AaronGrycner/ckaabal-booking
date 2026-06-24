@@ -72,6 +72,24 @@ export default function RootLayout({
                 Analytics
               </Link>
               <Link
+                href="/guide"
+                className="text-zinc-400 hover:text-zinc-200"
+              >
+                Guide
+              </Link>
+              <Link
+                href="/suggestions"
+                className="text-zinc-400 hover:text-zinc-200"
+              >
+                Suggestions
+              </Link>
+              <Link
+                href="/settings/signature"
+                className="text-zinc-400 hover:text-zinc-200"
+              >
+                Signature
+              </Link>
+              <Link
                 href="/leads/new"
                 className="text-zinc-400 hover:text-zinc-200"
               >
