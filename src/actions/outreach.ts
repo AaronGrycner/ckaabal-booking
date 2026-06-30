@@ -26,7 +26,11 @@ import {
   getOrCreateSignatureTrackedLink,
   prepareOutreachEmailBodyWithTrackedLink,
 } from "@/lib/services/outreach-tracking";
-import { getSendableAttachments } from "@/lib/services/outreach-signature";
+import {
+  getSendableAttachments,
+  resolveOutreachSignatureText,
+  ensureSignatureOnBody,
+} from "@/lib/services/outreach-signature";
 import { toUserFacingError } from "@/lib/action-result";
 
 export type OutreachActionResult =
@@ -358,8 +362,10 @@ export async function sendOutreachEmailAction(
 
   try {
     const trackedLink = await getOrCreateSignatureTrackedLink(db, leadId);
+    const signature = await resolveOutreachSignatureText(db);
+    const bodyWithSignature = ensureSignatureOnBody(trimmedBody, signature);
     const bodyToSend = prepareOutreachEmailBodyWithTrackedLink(
-      trimmedBody,
+      bodyWithSignature,
       trackedLink,
     );
     const attachments = await getSendableAttachments(db);

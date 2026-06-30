@@ -87,6 +87,26 @@ export async function resolveOutreachSignatureText(db: Db) {
   return buildSignatureFromEnv();
 }
 
+/** Append the configured signature when the body does not already include it. */
+export function ensureSignatureOnBody(body: string, signature: string) {
+  const trimmed = body.trim();
+  if (!signature.trim()) return trimmed;
+
+  const signatureName = process.env.OUTREACH_SENDER_NAME?.trim();
+  if (
+    signatureName &&
+    trimmed.toLowerCase().includes(signatureName.toLowerCase())
+  ) {
+    return trimmed;
+  }
+
+  if (trimmed.includes(signature.trim())) {
+    return trimmed;
+  }
+
+  return `${trimmed}\n\n${signature}`;
+}
+
 export async function getSignatureSettingsView(db: Db): Promise<SignatureSettingsView> {
   const settings = await getOrCreateSignatureSettings(db);
   const attachments = await db.query.outreachEmailAttachments.findMany({

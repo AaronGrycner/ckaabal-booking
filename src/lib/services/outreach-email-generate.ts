@@ -2,7 +2,7 @@ import type { Lead, LeadActivity, WebsiteAudit } from "@/lib/db/schema";
 import { getDb } from "@/lib/db";
 import { getLastMessageSent } from "@/lib/crm-utils";
 import { getAuditIssues } from "@/lib/parse-audit-issues";
-import { resolveOutreachSignatureText } from "@/lib/services/outreach-signature";
+import { resolveOutreachSignatureText, ensureSignatureOnBody } from "@/lib/services/outreach-signature";
 import { formatGenreList } from "@/lib/services/venue-research";
 import OpenAI from "openai";
 
@@ -888,22 +888,6 @@ function ensureSenderIntro(
   return `${intro}\n\n${body.trim()}`;
 }
 
-function ensureSignature(body: string, signature: string) {
-  const trimmed = body.trim();
-  if (!signature.trim()) return trimmed;
-
-  const signatureName = process.env.OUTREACH_SENDER_NAME?.trim();
-  if (signatureName && trimmed.toLowerCase().includes(signatureName.toLowerCase())) {
-    return trimmed;
-  }
-
-  if (trimmed.includes(signature.trim())) {
-    return trimmed;
-  }
-
-  return `${trimmed}\n\n${signature}`;
-}
-
 function applyPostProcessing(
   subject: string,
   body: string,
@@ -911,7 +895,7 @@ function applyPostProcessing(
 ) {
   return {
     subject: stripEmDashes(subject.trim()),
-    body: ensureSignature(
+    body: ensureSignatureOnBody(
       ensureSenderIntro(stripEmDashes(body.trim()), context),
       context.signature,
     ),
@@ -1084,7 +1068,7 @@ function applyLightValidationFixes(
   }
 
   if (issues.some((issue) => issue.includes("Signature block is missing"))) {
-    nextBody = ensureSignature(nextBody, context.signature);
+    nextBody = ensureSignatureOnBody(nextBody, context.signature);
   }
 
   const revalidated = validateFinalEmail(nextSubject, nextBody, context);
