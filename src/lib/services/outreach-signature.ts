@@ -90,20 +90,9 @@ export async function resolveOutreachSignatureText(db: Db) {
 /** Append the configured signature when the body does not already include it. */
 export function ensureSignatureOnBody(body: string, signature: string) {
   const trimmed = body.trim();
-  if (!signature.trim()) return trimmed;
-
-  const signatureName = process.env.OUTREACH_SENDER_NAME?.trim();
-  if (
-    signatureName &&
-    trimmed.toLowerCase().includes(signatureName.toLowerCase())
-  ) {
-    return trimmed;
-  }
-
-  if (trimmed.includes(signature.trim())) {
-    return trimmed;
-  }
-
+  const sig = signature.trim();
+  if (!sig) return trimmed;
+  if (trimmed.includes(sig)) return trimmed;
   return `${trimmed}\n\n${signature}`;
 }
 
