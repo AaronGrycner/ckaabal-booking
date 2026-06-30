@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { updateLeadStatusAction, updateReviewStatusAction } from "@/actions/leads";
+import { updateLeadStatus, updateReviewStatus } from "@/actions/leads";
+import { ActionMessage } from "@/components/action-message";
 import { CrmStatusFilter } from "@/components/crm-status-filter";
 import { ContactAvailabilityBadges } from "@/components/contact-availability-badges";
 import { ReviewStatusFilter } from "@/components/review-status-filter";
@@ -28,6 +29,7 @@ import {
   type CrmFilter,
   type ReviewFilter,
 } from "@/lib/crm-utils";
+import { useActionRunner } from "@/hooks/use-action-runner";
 
 type LeadWithAudit = Lead & { latestAudit?: WebsiteAudit | null };
 
@@ -60,6 +62,7 @@ export function LeadTable({
   const [fitFilter, setFitFilter] = useState<string>("all");
   const [crmFilter, setCrmFilter] = useState<CrmFilter>("all");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const { isPending, message, run } = useActionRunner();
 
   const sortedLeads = useMemo(() => {
     let rows = [...initialLeads];
@@ -145,6 +148,8 @@ export function LeadTable({
 
       <CrmStatusFilter value={crmFilter} onChange={setCrmFilter} />
       <ReviewStatusFilter value={reviewFilter} onChange={setReviewFilter} />
+
+      <ActionMessage message={message} />
 
       <div className="rounded-lg border border-zinc-800">
         <Table>
@@ -281,36 +286,55 @@ export function LeadTable({
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`/leads/${lead.id}`}>View</Link>
                       </Button>
-                      <form action={updateReviewStatusAction}>
-                        <input type="hidden" name="leadId" value={lead.id} />
-                        <input
-                          type="hidden"
-                          name="reviewStatus"
-                          value="approved_for_outreach"
-                        />
-                        <Button variant="ghost" size="sm" type="submit">
-                          Approve
-                        </Button>
-                      </form>
-                      <form action={updateReviewStatusAction}>
-                        <input type="hidden" name="leadId" value={lead.id} />
-                        <input type="hidden" name="reviewStatus" value="rejected" />
-                        <Button variant="ghost" size="sm" type="submit">
-                          Reject
-                        </Button>
-                      </form>
-                      <form action={updateLeadStatusAction}>
-                        <input type="hidden" name="leadId" value={lead.id} />
-                        <input type="hidden" name="status" value="ready_to_contact" />
-                        <Button variant="ghost" size="sm" type="submit">
-                          Queue
-                        </Button>
-                      </form>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={isPending}
+                        onClick={() =>
+                          run(() =>
+                            updateReviewStatus(lead.id, "approved_for_outreach"),
+                          )
+                        }
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={isPending}
+                        onClick={() =>
+                          run(() => updateReviewStatus(lead.id, "rejected"))
+                        }
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={isPending}
+                        onClick={() =>
+                          run(() =>
+                            updateLeadStatus(lead.id, "ready_to_contact"),
+                          )
+                        }
+                      >
+                        Queue
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
               );
             })}
+            {!sortedLeads.length && (
+              <TableRow>
+                <TableCell colSpan={15} className="text-center text-zinc-500">
+                  No leads in this search run.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

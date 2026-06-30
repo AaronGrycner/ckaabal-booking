@@ -1,11 +1,16 @@
 "use client";
 
-import { logContactAction, updateLeadStatusAction } from "@/actions/leads";
+import { useRef } from "react";
+import {
+  logContactForLead,
+  updateLeadStatus,
+} from "@/actions/leads";
 import { LeadActivityTimeline } from "@/components/lead-activity-timeline";
+import { ActionMessage } from "@/components/action-message";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Lead, LeadActivity } from "@/lib/db/schema";
+import type { Lead, LeadActivity, LeadStatus, ContactMethod } from "@/lib/db/schema";
 import {
   contactMethodLabel,
   formatCrmDate,
@@ -18,6 +23,7 @@ import {
   followUpDueFieldLabel,
 } from "@/lib/crm-utils";
 import { contactMethods } from "@/lib/db/schema";
+import { useActionRunner } from "@/hooks/use-action-runner";
 
 export function LeadCrmPanel({
   lead,
@@ -28,8 +34,29 @@ export function LeadCrmPanel({
   activities: LeadActivity[];
   defaultFollowUpDays: number;
 }) {
+  const { isPending, message, run } = useActionRunner();
+  const logContactFormRef = useRef<HTMLFormElement>(null);
   const warning = getDuplicateOutreachWarning(lead);
   const displayStatus = getEffectiveLeadStatus(lead);
+
+  function handleStatusChange(status: LeadStatus) {
+    run(() => updateLeadStatus(lead.id, status));
+  }
+
+  function handleLogContact() {
+    const form = logContactFormRef.current;
+    if (!form) return;
+
+    const formData = new FormData(form);
+    run(() =>
+      logContactForLead(lead.id, {
+        method: String(formData.get("method") ?? "") as ContactMethod,
+        note: String(formData.get("note") ?? ""),
+        messageSent: String(formData.get("messageSent") ?? ""),
+        followUpDaysRaw: String(formData.get("followUpDays") ?? ""),
+      }),
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -82,27 +109,30 @@ export function LeadCrmPanel({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {group.statuses.map((status) => (
-                    <form key={status} action={updateLeadStatusAction}>
-                      <input type="hidden" name="leadId" value={lead.id} />
-                      <input type="hidden" name="status" value={status} />
-                      <Button
-                        type="submit"
-                        size="sm"
-                        variant={
-                          displayStatus === status ? "default" : "outline"
-                        }
-                      >
-                        {statusLabel(status)}
-                      </Button>
-                    </form>
+                    <Button
+                      key={status}
+                      type="button"
+                      size="sm"
+                      variant={displayStatus === status ? "default" : "outline"}
+                      disabled={isPending}
+                      onClick={() => handleStatusChange(status)}
+                    >
+                      {statusLabel(status)}
+                    </Button>
                   ))}
                 </div>
               </div>
             ))}
           </div>
 
-          <form action={logContactAction} className="space-y-3 border-t border-zinc-800 pt-4">
-            <input type="hidden" name="leadId" value={lead.id} />
+          <form
+            ref={logContactFormRef}
+            className="space-y-3 border-t border-zinc-800 pt-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleLogContact();
+            }}
+          >
             <p className="text-sm font-medium text-zinc-300">Log contact</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <select
@@ -138,10 +168,12 @@ export function LeadCrmPanel({
               placeholder="Optional note…"
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
             />
-            <Button type="submit" size="sm">
-              Log contact
+            <Button type="submit" size="sm" disabled={isPending}>
+              {isPending ? "Saving…" : "Log contact"}
             </Button>
           </form>
+
+          <ActionMessage message={message} />
         </CardContent>
       </Card>
 

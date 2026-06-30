@@ -7,6 +7,7 @@ import {
   deleteSignatureAttachment,
   saveSignatureSettings,
 } from "@/lib/services/outreach-signature";
+import { toUserFacingError } from "@/lib/action-result";
 
 export type SignatureSettingsActionState = {
   ok?: boolean;
@@ -35,7 +36,7 @@ export async function saveSignatureSettingsAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to save signature.",
+      error: toUserFacingError(error, "Failed to save signature."),
     };
   }
 }
@@ -57,7 +58,7 @@ export async function uploadSignatureAttachmentAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to upload file.",
+      error: toUserFacingError(error, "Failed to upload file."),
     };
   }
 }
@@ -65,6 +66,10 @@ export async function uploadSignatureAttachmentAction(
 export async function deleteSignatureAttachmentAction(
   attachmentId: number,
 ): Promise<SignatureSettingsActionState> {
+  if (!Number.isInteger(attachmentId) || attachmentId < 1) {
+    return { ok: false, error: "Invalid attachment." };
+  }
+
   try {
     const db = getDb();
     await deleteSignatureAttachment(db, attachmentId);
@@ -73,8 +78,7 @@ export async function deleteSignatureAttachmentAction(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete attachment.",
+      error: toUserFacingError(error, "Failed to delete attachment."),
     };
   }
 }

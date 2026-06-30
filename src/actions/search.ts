@@ -10,6 +10,7 @@ import {
   enqueueAuditsForRun,
 } from "@/lib/services/audit-queue";
 import { buildDedupeKey } from "@/lib/services/dedupe";
+import { isNextRedirectError, toUserFacingError } from "@/lib/action-result";
 import { searchPlaces } from "@/lib/services/places";
 
 export type SearchState = {
@@ -22,9 +23,10 @@ export async function runSearch(
 ): Promise<SearchState> {
   const niche = String(formData.get("niche") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
+  const maxResultsRaw = Number(formData.get("maxResults") ?? 20);
   const maxResults = Math.min(
     60,
-    Math.max(1, Number(formData.get("maxResults") ?? 20)),
+    Math.max(1, Number.isNaN(maxResultsRaw) ? 20 : maxResultsRaw),
   );
 
   if (!niche || !location) {
@@ -103,17 +105,11 @@ export async function runSearch(
 
     redirect(`/search/${run.id}`);
   } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "digest" in error &&
-      String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
-    ) {
+    if (isNextRedirectError(error)) {
       throw error;
     }
     return {
-      error:
-        error instanceof Error ? error.message : "Search failed. Try again.",
+      error: toUserFacingError(error, "Search failed. Try again."),
     };
   }
 }

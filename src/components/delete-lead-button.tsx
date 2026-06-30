@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 import { deleteLeadAction } from "@/actions/leads";
+import { ActionMessage } from "@/components/action-message";
 import { Button } from "@/components/ui/button";
+import { useActionRunner } from "@/hooks/use-action-runner";
 
 export function DeleteLeadButton({
   leadId,
@@ -12,8 +12,7 @@ export function DeleteLeadButton({
   leadId: number;
   businessName: string;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { isPending, message, run } = useActionRunner();
 
   function handleClick() {
     if (
@@ -24,24 +23,26 @@ export function DeleteLeadButton({
       return;
     }
 
-    startTransition(async () => {
+    run(async () => {
       const formData = new FormData();
       formData.set("leadId", String(leadId));
-      await deleteLeadAction(formData);
-      router.refresh();
+      return deleteLeadAction(formData);
     });
   }
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      onClick={handleClick}
-      disabled={isPending}
-      className="text-red-400 hover:text-red-300"
-    >
-      {isPending ? "Deleting…" : "Delete"}
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={handleClick}
+        disabled={isPending}
+        className="text-red-400 hover:text-red-300"
+      >
+        {isPending ? "Deleting…" : "Delete"}
+      </Button>
+      <ActionMessage message={message} className="text-xs" />
+    </div>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import {
   createSuggestionAction,
   deleteSuggestionAction,
   type SuggestionActionState,
 } from "@/actions/suggestions";
+import { ActionMessage } from "@/components/action-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SoftwareSuggestion } from "@/lib/db/schema";
@@ -23,6 +24,10 @@ export function SuggestionsPanel({
     initialState,
   );
   const [deletePending, startDelete] = useTransition();
+  const [deleteMessage, setDeleteMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -66,6 +71,7 @@ export function SuggestionsPanel({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <ActionMessage message={deleteMessage} className="mb-3" />
           {suggestions.length === 0 ? (
             <p className="text-sm text-zinc-500">No suggestions yet.</p>
           ) : (
@@ -89,8 +95,20 @@ export function SuggestionsPanel({
                     size="sm"
                     disabled={deletePending}
                     onClick={() => {
+                      setDeleteMessage(null);
                       startDelete(async () => {
-                        await deleteSuggestionAction(item.id);
+                        const result = await deleteSuggestionAction(item.id);
+                        if (!result.ok) {
+                          setDeleteMessage({
+                            type: "error",
+                            text: result.error ?? "Failed to delete suggestion.",
+                          });
+                          return;
+                        }
+                        setDeleteMessage({
+                          type: "success",
+                          text: result.message ?? "Suggestion deleted.",
+                        });
                       });
                     }}
                   >

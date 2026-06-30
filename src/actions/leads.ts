@@ -15,6 +15,7 @@ import {
   type Outcome,
   type ReviewStatus,
   type SourceType,
+  type ContactMethod,
 } from "@/lib/db/schema";
 import { isContactMethod } from "@/lib/crm-utils";
 import {
@@ -29,6 +30,13 @@ import {
   auditLead,
 } from "@/lib/services/audit-queue";
 import { buildDedupeKey } from "@/lib/services/dedupe";
+import {
+  type ActionResult,
+  actionFailure,
+  actionSuccess,
+  isNextRedirectError,
+  runServerAction,
+} from "@/lib/action-result";
 
 async function revalidateLeadPaths(leadId: number, searchRunId?: number | null) {
   revalidatePath(`/leads/${leadId}`);
@@ -77,140 +85,222 @@ async function revalidateAfterLeadDeletes(searchRunIds: Array<number | null>) {
   }
 }
 
-export async function deleteLead(leadId: number) {
+export async function deleteLead(leadId: number): Promise<ActionResult> {
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await db.delete(leads).where(eq(leads.id, leadId));
-  await revalidateAfterLeadDeletes([lead.searchRunId]);
+  return runServerAction(async () => {
+    await db.delete(leads).where(eq(leads.id, leadId));
+    await revalidateAfterLeadDeletes([lead.searchRunId]);
+  }, "Could not delete lead. Try again.");
 }
 
-export async function deleteLeadAction(formData: FormData) {
+export async function deleteLeadAction(formData: FormData): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
-  if (leadId == null) return;
-  await deleteLead(leadId);
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
+  return deleteLead(leadId);
 }
 
-export async function deleteLeadsAction(formData: FormData) {
+export async function deleteLeadsAction(formData: FormData): Promise<ActionResult> {
   const leadIds = parseLeadIds(formData);
-  if (!leadIds.length) return;
+  if (!leadIds.length) {
+    return actionFailure("No leads selected.");
+  }
 
   const db = getDb();
   const toDelete = await db.query.leads.findMany({
     where: inArray(leads.id, leadIds),
   });
-  if (!toDelete.length) return;
+  if (!toDelete.length) {
+    return actionFailure("No matching leads found.");
+  }
 
-  await db.delete(leads).where(inArray(leads.id, leadIds));
-  await revalidateAfterLeadDeletes(toDelete.map((lead) => lead.searchRunId));
+  return runServerAction(async () => {
+    await db.delete(leads).where(inArray(leads.id, leadIds));
+    await revalidateAfterLeadDeletes(toDelete.map((lead) => lead.searchRunId));
+  }, "Could not delete leads. Try again.");
 }
 
-export async function updateLeadStatus(leadId: number, status: LeadStatus) {
+export async function updateLeadStatus(
+  leadId: number,
+  status: LeadStatus,
+): Promise<ActionResult> {
+  if (!leadStatuses.includes(status)) {
+    return actionFailure("Invalid status.");
+  }
+
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await applyStatusChange(db, leadId, status);
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await applyStatusChange(db, leadId, status);
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not update status. Try again.");
 }
 
-export async function updateLeadStatusAction(formData: FormData) {
+export async function updateLeadStatusAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
   const status = String(formData.get("status") ?? "") as LeadStatus;
-  if (leadId == null || !leadStatuses.includes(status)) return;
-  await updateLeadStatus(leadId, status);
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
+  return updateLeadStatus(leadId, status);
 }
 
-export async function logContactAction(formData: FormData) {
-  const leadId = parseLeadId(formData);
-  if (leadId == null) return;
+export type LogContactInput = {
+  method: ContactMethod;
+  note?: string;
+  messageSent?: string;
+  followUpDaysRaw?: string;
+};
 
-  const methodRaw = String(formData.get("method") ?? "");
-  if (!isContactMethod(methodRaw)) return;
+export async function logContactForLead(
+  leadId: number,
+  input: LogContactInput,
+): Promise<ActionResult> {
+  if (!isContactMethod(input.method)) {
+    return actionFailure("Choose a valid contact method.");
+  }
 
-  const note = String(formData.get("note") ?? "").trim() || undefined;
-  const messageSent =
-    String(formData.get("messageSent") ?? "").trim() || undefined;
-  const followUpDaysRaw = String(formData.get("followUpDays") ?? "").trim();
+  const followUpDaysRaw = input.followUpDaysRaw?.trim() ?? "";
   const followUpDays = followUpDaysRaw
     ? Number.parseInt(followUpDaysRaw, 10)
     : undefined;
 
+  if (
+    followUpDaysRaw &&
+    followUpDaysRaw !== "0" &&
+    (followUpDays == null || Number.isNaN(followUpDays) || followUpDays < 0)
+  ) {
+    return actionFailure("Follow-up days must be a valid number.");
+  }
+
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await logContact(db, leadId, {
-    method: methodRaw,
-    note,
-    messageSent,
-    followUpDays:
-      followUpDaysRaw === "0"
-        ? 0
-        : followUpDays != null && !Number.isNaN(followUpDays)
-          ? followUpDays
-          : undefined,
-  });
-
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await logContact(db, leadId, {
+      method: input.method,
+      note: input.note?.trim() || undefined,
+      messageSent: input.messageSent?.trim() || undefined,
+      followUpDays:
+        followUpDaysRaw === "0"
+          ? 0
+          : followUpDays != null && !Number.isNaN(followUpDays)
+            ? followUpDays
+            : undefined,
+    });
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not log contact. Try again.");
 }
 
-export async function scheduleFollowUpAction(formData: FormData) {
+export async function logContactAction(formData: FormData): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
-  if (leadId == null) return;
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
+
+  return logContactForLead(leadId, {
+    method: String(formData.get("method") ?? "") as ContactMethod,
+    note: String(formData.get("note") ?? ""),
+    messageSent: String(formData.get("messageSent") ?? ""),
+    followUpDaysRaw: String(formData.get("followUpDays") ?? ""),
+  });
+}
+
+export async function scheduleFollowUpAction(
+  formData: FormData,
+): Promise<ActionResult> {
+  const leadId = parseLeadId(formData);
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
 
   const dueRaw = String(formData.get("followUpDueAt") ?? "").trim();
-  if (!dueRaw) return;
+  if (!dueRaw) {
+    return actionFailure("Choose a follow-up date.");
+  }
 
   const dueAt = new Date(dueRaw);
-  if (Number.isNaN(dueAt.getTime())) return;
+  if (Number.isNaN(dueAt.getTime())) {
+    return actionFailure("Enter a valid follow-up date.");
+  }
 
   const note = String(formData.get("note") ?? "").trim() || undefined;
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await scheduleFollowUp(db, leadId, dueAt, note);
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await scheduleFollowUp(db, leadId, dueAt, note);
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not schedule follow-up. Try again.");
 }
 
-export async function updateLeadNotes(leadId: number, notes: string) {
+export async function updateLeadNotes(
+  leadId: number,
+  notes: string,
+): Promise<ActionResult> {
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
-
-  await db
-    .update(leads)
-    .set({ notes, updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
-
-  if (notes.trim() && notes.trim() !== (lead.notes ?? "").trim()) {
-    const { recordActivity } = await import("@/lib/services/crm");
-    await recordActivity(db, {
-      leadId,
-      activityType: "note_added",
-      summary: "Notes updated",
-    });
+  if (!lead) {
+    return actionFailure("Lead not found.");
   }
 
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await db
+      .update(leads)
+      .set({ notes, updatedAt: new Date() })
+      .where(eq(leads.id, leadId));
+
+    if (notes.trim() && notes.trim() !== (lead.notes ?? "").trim()) {
+      const { recordActivity } = await import("@/lib/services/crm");
+      await recordActivity(db, {
+        leadId,
+        activityType: "note_added",
+        summary: "Notes updated",
+      });
+    }
+
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not save notes. Try again.");
 }
 
-export async function saveLeadNotesAction(formData: FormData) {
+export async function saveLeadNotesAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
-  if (leadId == null) return;
-  await updateLeadNotes(leadId, String(formData.get("notes") ?? ""));
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
+  const result = await updateLeadNotes(leadId, String(formData.get("notes") ?? ""));
+  if (!result.ok) return result;
+  return actionSuccess("Notes saved.");
 }
 
 function isValidEmail(value: string) {
@@ -220,11 +310,11 @@ function isValidEmail(value: string) {
 export async function updateLeadContactEmail(
   leadId: number,
   contactEmail: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<ActionResult> {
   const trimmed = contactEmail.trim();
 
   if (trimmed && !isValidEmail(trimmed)) {
-    return { ok: false, error: "Enter a valid email address." };
+    return actionFailure("Enter a valid email address.");
   }
 
   const db = getDb();
@@ -232,103 +322,136 @@ export async function updateLeadContactEmail(
     where: eq(leads.id, leadId),
   });
   if (!lead) {
-    return { ok: false, error: "Lead not found." };
+    return actionFailure("Lead not found.");
   }
 
-  await db
-    .update(leads)
-    .set({
-      contactEmail: trimmed || null,
-      emailSource: trimmed ? "manual" : null,
-      emailConfidence: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(leads.id, leadId));
+  return runServerAction(async () => {
+    await db
+      .update(leads)
+      .set({
+        contactEmail: trimmed || null,
+        emailSource: trimmed ? "manual" : null,
+        emailConfidence: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, leadId));
 
-  await revalidateLeadPaths(leadId, lead.searchRunId);
-  return { ok: true };
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not save contact email. Try again.");
 }
 
-export async function updateLeadContactEmailAction(formData: FormData) {
+export async function updateLeadContactEmailAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
-  if (leadId == null) return;
-  await updateLeadContactEmail(
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
+  return updateLeadContactEmail(
     leadId,
     String(formData.get("contactEmail") ?? ""),
   );
 }
 
-export async function setCallList(leadId: number, onCallList: boolean) {
+export async function setCallList(
+  leadId: number,
+  onCallList: boolean,
+): Promise<ActionResult> {
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await db
-    .update(leads)
-    .set({
-      onCallList,
-      callListAddedAt: onCallList ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(leads.id, leadId));
+  return runServerAction(async () => {
+    await db
+      .update(leads)
+      .set({
+        onCallList,
+        callListAddedAt: onCallList ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, leadId));
 
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not update call list. Try again.");
 }
 
-export async function setCallListAction(formData: FormData) {
+export async function setCallListAction(formData: FormData): Promise<ActionResult> {
   const leadId = parseLeadId(formData);
-  if (leadId == null) return;
+  if (leadId == null) {
+    return actionFailure("Invalid lead.");
+  }
   const onCallList = formData.get("onCallList") === "true";
-  await setCallList(leadId, onCallList);
+  return setCallList(leadId, onCallList);
 }
 
 export async function updateReviewStatus(
   leadId: number,
   reviewStatus: ReviewStatus,
   rejectionReason?: string,
-) {
-  if (!reviewStatuses.includes(reviewStatus)) return;
+): Promise<ActionResult> {
+  if (!reviewStatuses.includes(reviewStatus)) {
+    return actionFailure("Invalid review status.");
+  }
 
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await applyReviewChange(db, leadId, {
-    reviewStatus,
-    rejectionReason,
-  });
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await applyReviewChange(db, leadId, {
+      reviewStatus,
+      rejectionReason,
+    });
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not update review status. Try again.");
 }
 
-export async function updateReviewStatusAction(formData: FormData) {
+export async function updateReviewStatusAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const leadIdRaw = formData.get("leadId");
   const leadId =
     typeof leadIdRaw === "string"
       ? Number.parseInt(leadIdRaw, 10)
       : Number.NaN;
-  if (Number.isNaN(leadId)) return;
+  if (Number.isNaN(leadId)) {
+    return actionFailure("Invalid lead.");
+  }
 
   const reviewStatus = String(formData.get("reviewStatus") ?? "") as ReviewStatus;
   const rejectionReason =
     String(formData.get("rejectionReason") ?? "").trim() || undefined;
-  await updateReviewStatus(leadId, reviewStatus, rejectionReason);
+  return updateReviewStatus(leadId, reviewStatus, rejectionReason);
 }
 
-export async function updateOutcome(leadId: number, outcome: Outcome) {
-  if (!outcomes.includes(outcome)) return;
+export async function updateOutcome(
+  leadId: number,
+  outcome: Outcome,
+): Promise<ActionResult> {
+  if (!outcomes.includes(outcome)) {
+    return actionFailure("Invalid outcome.");
+  }
 
   const db = getDb();
   const lead = await db.query.leads.findFirst({
     where: eq(leads.id, leadId),
   });
-  if (!lead) return;
+  if (!lead) {
+    return actionFailure("Lead not found.");
+  }
 
-  await applyOutcomeChange(db, leadId, outcome);
-  await revalidateLeadPaths(leadId, lead.searchRunId);
+  return runServerAction(async () => {
+    await applyOutcomeChange(db, leadId, outcome);
+    await revalidateLeadPaths(leadId, lead.searchRunId);
+  }, "Could not update outcome. Try again.");
 }
 
 export type CreateManualLeadState = {
@@ -397,15 +520,6 @@ async function insertManualLead(input: ManualLeadInput) {
   return lead;
 }
 
-function isNextRedirectError(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === "object" &&
-    "digest" in error &&
-    String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
-  );
-}
-
 export async function createManualLead(
   _prev: CreateManualLeadState,
   formData: FormData,
@@ -428,6 +542,10 @@ export async function createManualLead(
 
   if (!businessName) {
     return { error: "Venue name is required." };
+  }
+
+  if (contactEmail && !isValidEmail(contactEmail)) {
+    return { error: "Enter a valid contact email address." };
   }
 
   try {

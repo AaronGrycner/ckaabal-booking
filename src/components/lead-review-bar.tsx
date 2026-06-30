@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { updateReviewStatus } from "@/actions/leads";
+import { ActionMessage } from "@/components/action-message";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Lead } from "@/lib/db/schema";
@@ -11,30 +11,29 @@ import {
   reviewStatusBadgeVariant,
   reviewStatusLabel,
 } from "@/lib/crm-utils";
+import { useActionRunner } from "@/hooks/use-action-runner";
 
 export function LeadReviewBar({ lead }: { lead: Lead }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { isPending, message, run } = useActionRunner();
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
   function handleApprove() {
-    startTransition(async () => {
-      await updateReviewStatus(lead.id, "approved_for_outreach");
-      router.refresh();
-    });
+    run(() => updateReviewStatus(lead.id, "approved_for_outreach"));
   }
 
   function handleReject() {
-    startTransition(async () => {
-      await updateReviewStatus(
+    run(async () => {
+      const result = await updateReviewStatus(
         lead.id,
         "rejected",
         rejectionReason.trim() || undefined,
       );
-      setShowRejectForm(false);
-      setRejectionReason("");
-      router.refresh();
+      if (result.ok) {
+        setShowRejectForm(false);
+        setRejectionReason("");
+      }
+      return result;
     });
   }
 
@@ -102,6 +101,8 @@ export function LeadReviewBar({ lead }: { lead: Lead }) {
           </Button>
         </div>
       )}
+
+      <ActionMessage message={message} className="mt-3" />
     </div>
   );
 }

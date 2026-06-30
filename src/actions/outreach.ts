@@ -27,6 +27,7 @@ import {
   prepareOutreachEmailBodyWithTrackedLink,
 } from "@/lib/services/outreach-tracking";
 import { getSendableAttachments } from "@/lib/services/outreach-signature";
+import { toUserFacingError } from "@/lib/action-result";
 
 export type OutreachActionResult =
   | {
@@ -113,9 +114,16 @@ export async function saveOutreachDraftAction(
     return { ok: false, error: "Subject and body are required to save a draft." };
   }
 
-  await saveOutreachDraft(leadId, trimmedSubject, trimmedBody);
-  await revalidateLeadPaths(leadId, data.lead.searchRunId);
-  return { ok: true, message: "Draft saved." };
+  try {
+    await saveOutreachDraft(leadId, trimmedSubject, trimmedBody);
+    await revalidateLeadPaths(leadId, data.lead.searchRunId);
+    return { ok: true, message: "Draft saved." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toUserFacingError(error, "Failed to save draft."),
+    };
+  }
 }
 
 export async function generateOutreachEmailAction(
@@ -149,12 +157,13 @@ export async function generateOutreachEmailAction(
       quality: toOutreachQualityReview(result),
     };
   } catch (error) {
-    if (error instanceof OutreachGenerationError) {
-      return { ok: false, error: error.message };
-    }
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to generate email.",
+      error: toUserFacingError(
+        error,
+        "Failed to generate email.",
+        OutreachGenerationError,
+      ),
     };
   }
 }
@@ -201,12 +210,13 @@ export async function generateFollowUpOutreachEmailAction(
       message: "Follow-up email generated.",
     };
   } catch (error) {
-    if (error instanceof OutreachGenerationError) {
-      return { ok: false, error: error.message };
-    }
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to generate follow-up email.",
+      error: toUserFacingError(
+        error,
+        "Failed to generate follow-up email.",
+        OutreachGenerationError,
+      ),
     };
   }
 }
@@ -258,12 +268,13 @@ export async function premiumPolishOutreachEmailAction(
       message: "Draft polished with premium model.",
     };
   } catch (error) {
-    if (error instanceof OutreachGenerationError) {
-      return { ok: false, error: error.message };
-    }
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to polish email.",
+      error: toUserFacingError(
+        error,
+        "Failed to polish email.",
+        OutreachGenerationError,
+      ),
     };
   }
 }
@@ -316,7 +327,7 @@ export async function sendOutreachEmailAction(
     return {
       ok: false,
       error:
-        "Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env.local.",
+        "Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in your environment.",
     };
   }
 
@@ -375,7 +386,7 @@ export async function sendOutreachEmailAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to send email.",
+      error: toUserFacingError(error, "Failed to send email."),
     };
   }
 

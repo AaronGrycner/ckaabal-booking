@@ -78,7 +78,7 @@ export async function sendGmailMessage(input: {
   const config = getSmtpConfig();
   if (!config) {
     throw new Error(
-      "Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env.local.",
+      "Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in your environment.",
     );
   }
 

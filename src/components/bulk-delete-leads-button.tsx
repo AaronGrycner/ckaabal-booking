@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 import { deleteLeadsAction } from "@/actions/leads";
+import { ActionMessage } from "@/components/action-message";
 import { Button } from "@/components/ui/button";
+import { useActionRunner } from "@/hooks/use-action-runner";
 
 export function BulkDeleteLeadsButton({
   leadIds,
@@ -14,8 +14,7 @@ export function BulkDeleteLeadsButton({
   disabled?: boolean;
   onDeleted?: () => void;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { isPending, message, run } = useActionRunner();
 
   function handleClick() {
     if (!leadIds.length) return;
@@ -28,25 +27,32 @@ export function BulkDeleteLeadsButton({
       return;
     }
 
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("leadIds", leadIds.join(","));
-      await deleteLeadsAction(formData);
-      onDeleted?.();
-      router.refresh();
-    });
+    run(
+      async () => {
+        const formData = new FormData();
+        formData.set("leadIds", leadIds.join(","));
+        return deleteLeadsAction(formData);
+      },
+      {
+        successMessage: `Deleted ${leadIds.length} lead${leadIds.length === 1 ? "" : "s"}.`,
+        onSuccess: onDeleted,
+      },
+    );
   }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={handleClick}
-      disabled={disabled || isPending || !leadIds.length}
-      className="border-red-900/60 text-red-300 hover:bg-red-950/40 hover:text-red-200"
-    >
-      {isPending ? "Deleting…" : `Delete selected (${leadIds.length})`}
-    </Button>
+    <div className="flex flex-col gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleClick}
+        disabled={disabled || isPending || !leadIds.length}
+        className="border-red-900/60 text-red-300 hover:bg-red-950/40 hover:text-red-200"
+      >
+        {isPending ? "Deleting…" : `Delete selected (${leadIds.length})`}
+      </Button>
+      <ActionMessage message={message} className="text-xs" />
+    </div>
   );
 }

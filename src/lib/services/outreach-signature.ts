@@ -6,6 +6,7 @@ import {
   type OutreachEmailAttachment,
   type OutreachSignatureSettings,
 } from "@/lib/db/schema";
+import { UserFacingError } from "@/lib/action-result";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -140,14 +141,14 @@ export function validateAttachmentFile(file: File) {
 export async function addSignatureAttachment(db: Db, file: File) {
   const validationError = validateAttachmentFile(file);
   if (validationError) {
-    throw new Error(validationError);
+    throw new UserFacingError(validationError);
   }
 
   const count = await db.query.outreachEmailAttachments.findMany({
     columns: { id: true },
   });
   if (count.length >= MAX_ATTACHMENTS) {
-    throw new Error(`Maximum ${MAX_ATTACHMENTS} attachments allowed.`);
+    throw new UserFacingError(`Maximum ${MAX_ATTACHMENTS} attachments allowed.`);
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());

@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { softwareSuggestions } from "@/lib/db/schema";
+import { toUserFacingError } from "@/lib/action-result";
 
 export type SuggestionActionState = {
   ok?: boolean;
@@ -31,7 +32,7 @@ export async function createSuggestionAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Failed to save suggestion.",
+      error: toUserFacingError(error, "Failed to save suggestion."),
     };
   }
 }
@@ -51,8 +52,7 @@ export async function deleteSuggestionAction(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete suggestion.",
+      error: toUserFacingError(error, "Failed to delete suggestion."),
     };
   }
 }

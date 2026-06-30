@@ -220,9 +220,8 @@ export function OutreachEmailPanel({
               <p className="font-medium">Gmail not configured</p>
               <p className="mt-1 text-xs text-amber-200/90">
                 Add <code className="rounded bg-black/30 px-1">GMAIL_USER</code> and{" "}
-                <code className="rounded bg-black/30 px-1">GMAIL_APP_PASSWORD</code> to{" "}
-                <code className="rounded bg-black/30 px-1">.env.local</code>. Use a
-                Google App Password (requires 2FA on the account).
+                <code className="rounded bg-black/30 px-1">GMAIL_APP_PASSWORD</code> to your
+                environment variables. Use a Google App Password (requires 2FA on the account).
               </p>
             </div>
           ) : (
